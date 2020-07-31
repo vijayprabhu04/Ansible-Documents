@@ -1,0 +1,51 @@
+---
+- hosts: all
+  remote_user: oracle
+  become: true
+  gather_facts: no
+  vars_files:
+   - ora_sysctl.yml
+   - ora_security.yml
+   - ora_packages.yml
+   - ora_users.yml
+  vars_prompt:
+   - name: password
+     prompt: "Enter your password which need to be set for oracle user"
+     private: yes
+  tasks:
+   - name: set sysctl parameters
+     sysctl: name={{ item.name }} value={{ item.value }} state=present
+     with_items: "{{ sysctl }}"
+     ignore_errors: yes
+   - name: set kernal parameters
+     lineinfile: path=/etc/security/limits.d/oracle-rdbms-server-12cR1-preinstall.conf line={{ item.line }} create=yes
+     with_items: "{{ security }}"
+     ignore_errors: yes
+   - name: Install required packages
+     yum: name={{ package }} state=present
+     ignore_errors: yes
+   - name: Create new groups
+     group: name={{ item }} state=present
+     with_items: "{{ group }}"
+     ignore_errors: yes
+   - name: Create new users
+     user: name={{ item }} state=present
+     with_items: "{{ user }}"
+     ignore_errors: yes
+   - name: Set password
+     user: name=oracle password={{ password | password_hash('sha512') }}
+     ignore_errors: yes
+   - name: Set SELINUX to permissive
+     lineinfile: path=/etc/selinux/config regexp='^SELINUX=' line=SELINUX=permissive
+     notify: Selinux set-enforce
+     notify: Stopping firewall
+     notify: Disable firewall
+   - name: Create a directory if it does not exist
+     file: path=/u01/app/oracle/product/12.1.0.2/db_1 state=directory owner=oracle group=oinstall mode='0775'
+  handlers:
+   - name: Stopping firewall
+     service: name=firewalld state=stop
+   - name: Disable firewall
+     shell: systemctl disable firewalld
+   - name: Selinux set-enforce
+     shell: setenforce Permissive

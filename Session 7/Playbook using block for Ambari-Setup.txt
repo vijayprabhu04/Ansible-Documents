@@ -1,0 +1,61 @@
+---
+- hosts: all
+  gather_facts: no
+  tasks:
+   - name: Master Node configuration
+     block:
+      - name: Download Ambari Repo
+        get_url:
+         url: http://public-repo-1.hortonworks.com/ambari/centos7/2.x/updates/2.6.1.5/ambari.repo
+         dest: /etc/yum.repos.d/ambari.repo
+      - name: Install Ambari in Master Node
+        yum: name=ambari-server state=present
+      - name: Install Expect module
+        command: pip install pexpect
+      - name: Setting up Ambari
+        expect:
+         command: ambari-server setup
+         responses:
+           Customize user account for ambari-server daemon : "n"
+           Enter user account for ambari-server daemon: "admin"
+           Enter choice : "1"
+           Do you want to change Oracle JDK : "n"
+           Enter advanced database configuration : "n"
+           Do you accept the Oracle Binary Code License Agreement : "y"
+           Enable Ambari Server to download and install GPL Licensed LZO packages : "y"
+      - name: Starting Ambari service
+        command: ambari-server start
+      - name: Preparing /etc/hosts file in Master nodes
+        blockinfile:
+         path: /etc/hosts
+         block: |
+          172.xx.xx.245 node01 node01.xxx.xxxx.net
+          172.xx.xx.247 node02 node02.xxx.xxxx.net
+          172.xx.xx.244 node03 node03.xxx.xxxx.net
+       - name: Preparing /etc/sysconfig file in Master node
+         blockinfile:
+          path: /etc/sysconfig/network
+          block: |
+           NETWORKING=yes
+           HOSTNAME=node01
+     tags: Master
+   - name: Slave Node configuration
+     block:
+      - name: Preparing /etc/hosts file in Slave nodes
+        blockinfile:
+         path: /etc/hosts
+         block: |
+          172.xx.xx.245 node01 node01.xxx.xxxx.net
+          172.xx.xx.247 node02 node02.xxx.xxxx.net
+          172.xx.xx.244 node03 node03.xxx.xxxx.net
+      - name: Preparing /etc/sysconfig file
+        blockinfile:
+         path: /etc/sysconfig/network
+         block: |
+          NETWORKING=yes
+          HOSTNAME=node02
+      - name: Install Ambari-Agent in Slave Nodes
+        yum: name=ambari-agent state=present
+      - name: Starting Ambari-Agent service
+        command: ambari-agent start
+     tags: Slave
